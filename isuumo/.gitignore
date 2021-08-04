@@ -1,0 +1,7 @@
+.DS_*
+*.log
+**/*.backup.*
+**/*.back.*
+
+node_modules
+bower_components
