@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+	"github.com/sevenNt/echo-pprof"
 )
 
 const Limit = 20
@@ -268,6 +269,8 @@ func main() {
 	e.POST("/api/estate/nazotte", searchEstateNazotte)
 	e.GET("/api/estate/search/condition", getEstateSearchCondition)
 	e.GET("/api/recommended_estate/:id", searchRecommendedEstateWithChair)
+
+	echopprof.Wrap(e)
 
 	mySQLConnectionData = NewMySQLConnectionEnv()
 
