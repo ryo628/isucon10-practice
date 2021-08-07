@@ -25,3 +25,7 @@ go/
 kataribe.toml
 local/
 isuumo/.github/
+.mysql_history
+pprof
+pprof.png
+slow.log
