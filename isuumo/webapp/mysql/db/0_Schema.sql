@@ -37,6 +37,8 @@ CREATE TABLE isuumo.chair
     features    VARCHAR(64)     NOT NULL,
     kind        VARCHAR(64)     NOT NULL,
     popularity  INTEGER         NOT NULL,
+    popularity_reversed INTEGER AS (-popularity) STORED NOT NULL,
     stock       INTEGER         NOT NULL
 );
-CREATE INDEX index_index ON isuumo.chair(price);
+CREATE INDEX index_price ON isuumo.chair(price);
+CREATE INDEX index_popurarity_reversed ON isuumo.chair(popularity_reversed);
