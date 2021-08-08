@@ -407,6 +407,8 @@ func initialize(c echo.Context) error {
 		}
 	}
 
+	chairCacheManager.Flush()
+	estateCacheManager.Flush()
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
 	})
@@ -614,11 +616,18 @@ func searchChairs(c echo.Context) error {
 	searchCondition := strings.Join(conditions, " AND ")
 	limitOffset := " ORDER BY popularity_reversed, id ASC LIMIT ? OFFSET ?"
 
+	var cacheKey = "searchChairs"
 	var res ChairSearchResponse
-	err = dbChair.Get(&res.Count, countQuery+searchCondition, params...)
-	if err != nil {
-		c.Logger().Errorf("searchChairs DB execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	v, found := chairCacheManager.Get(cacheKey + "count" + fmt.Sprintln(params))
+	if found {
+		res.Count = v.(int64)
+	} else {
+		err = dbChair.Get(&res.Count, countQuery+searchCondition, params...)
+		if err != nil {
+			c.Logger().Errorf("searchChairs DB execution error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		chairCacheManager.Set(cacheKey+"count"+fmt.Sprintln(params), res.Count, gocache.DefaultExpiration)
 	}
 
 	chairs := []Chair{}
