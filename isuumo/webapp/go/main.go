@@ -7,6 +7,7 @@ import (
 	"fmt"
 	gocache "github.com/patrickmn/go-cache"
 	"io/ioutil"
+	ll "log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -632,16 +633,26 @@ func searchChairs(c echo.Context) error {
 
 	chairs := []Chair{}
 	params = append(params, perPage, page*perPage)
-	err = dbChair.Select(&chairs, searchQuery+searchCondition+limitOffset, params...)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return c.JSON(http.StatusOK, ChairSearchResponse{Count: 0, Chairs: []Chair{}})
+	vv, found := chairCacheManager.Get(cacheKey + "search" + searchCondition + fmt.Sprintln(params, res.Count))
+	if found {
+		gotChairs := vv.([]Chair)
+		// ll.Println("GOT!!!", cacheKey + "search" + searchCondition+fmt.Sprintln(params))
+		res.Chairs = gotChairs
+		ll.Println("GOT!!!", res.Chairs)
+		return c.JSON(http.StatusOK, res)
+	} else {
+		err = dbChair.Select(&chairs, searchQuery+searchCondition+limitOffset, params...)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return c.JSON(http.StatusOK, ChairSearchResponse{Count: 0, Chairs: []Chair{}})
+			}
+			c.Logger().Errorf("searchChairs DB execution error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
 		}
-		c.Logger().Errorf("searchChairs DB execution error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+		chairCacheManager.Set(cacheKey+"search"+searchCondition+fmt.Sprintln(params, res.Count), chairs, gocache.DefaultExpiration)
+		res.Chairs = chairs
 	}
 
-	res.Chairs = chairs
 
 	return c.JSON(http.StatusOK, res)
 }
