@@ -46,7 +46,7 @@ type Chair struct {
 	Features    string `db:"features" json:"features"`
 	Kind        string `db:"kind" json:"kind"`
 	Popularity  int64  `db:"popularity" json:"-"`
-	PopularityReversed  int64   `db:"popularity_reversed" json:"-"`
+	PopularityReversed  *int64   `db:"popularity_reversed" json:"-"`
 	Stock       int64  `db:"stock" json:"-"`
 }
 
@@ -361,12 +361,7 @@ func postChair(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("failed to begin tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
+	chairs := []Chair{}
 	for _, row := range records {
 		rm := RecordMapper{Record: row}
 		id := rm.NextInt()
@@ -386,16 +381,15 @@ func postChair(c echo.Context) error {
 			c.Logger().Errorf("failed to read record: %v", err)
 			return c.NoContent(http.StatusBadRequest)
 		}
-		_, err := tx.Exec("INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
-		if err != nil {
+		chairs = append(chairs, Chair{int64(id), name, description, thumbnail, int64(price), int64(height), int64(width), int64(depth), color, features, kind, int64(popularity), nil, int64(stock)})
+	}
+	c.Logger().Errorf("failed to insert chairs: %v", len(chairs))
+	_, err =  db.NamedExec(`INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(:id,:name,:description,:thumbnail,:price,:height,:width,:depth,:color,:features,:kind,:popularity,:stock)`, chairs)
+	if err != nil {
 			c.Logger().Errorf("failed to insert chair: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
-		}
 	}
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("failed to commit tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+
 	return c.NoContent(http.StatusCreated)
 }
 
