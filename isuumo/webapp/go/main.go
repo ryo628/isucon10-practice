@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	gocache "github.com/patrickmn/go-cache"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -38,6 +40,9 @@ var stmtGetLowPricedEstate *sqlx.Stmt
 var stmtSearchRecommendedEstateWithChair1 *sqlx.Stmt
 var stmtSearchRecommendedEstateWithChair2 *sqlx.Stmt
 var stmtPostEstateRequestDocument *sqlx.Stmt
+
+var chairCacheManager *gocache.Cache
+var estateCacheManager *gocache.Cache
 
 type InitializeResponse struct {
 	Language string `json:"language"`
@@ -266,6 +271,9 @@ func init() {
 		os.Exit(1)
 	}
 	json.Unmarshal(jsonText, &estateSearchCondition)
+
+	chairCacheManager = gocache.New(5*time.Minute, 10*time.Minute)
+	estateCacheManager = gocache.New(5*time.Minute, 10*time.Minute)
 }
 
 func main() {
@@ -483,6 +491,7 @@ func postChair(c echo.Context) error {
 			"stock":       stock,
 		}
 	}
+	chairCacheManager.Flush()
 	_, err = dbChair.NamedExec(`INSERT INTO chair (id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES (:id,:name,:description,:thumbnail,:price,:height,:width,:depth,:color,:features,:kind,:popularity,:stock)`, chairs)
 	if err != nil {
 			c.Logger().Errorf("failed to insert chair: %v", err)
@@ -686,6 +695,14 @@ func getChairSearchCondition(c echo.Context) error {
 
 func getLowPricedChair(c echo.Context) error {
 	var chairs []Chair
+	var cacheKey = "getLowPriced"
+
+	v, found := chairCacheManager.Get(cacheKey)
+	if found {
+		gotChairs := v.([]Chair)
+		return c.JSON(http.StatusOK, ChairListResponse{Chairs: gotChairs})
+	}
+
 	// query := `SELECT * FROM chair WHERE stock > 0 ORDER BY price ASC, id ASC LIMIT ?`
 	// err := dbChair.Select(&chairs, query, Limit)
 	err := stmtGetLowPricedChair.Select(&chairs, Limit)
@@ -698,6 +715,7 @@ func getLowPricedChair(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	chairCacheManager.Set(cacheKey, chairs, gocache.DefaultExpiration)
 	return c.JSON(http.StatusOK, ChairListResponse{Chairs: chairs})
 }
 
@@ -788,6 +806,7 @@ func postEstate(c echo.Context) error {
 			"popularity":  popularity,
 		}
 	}
+	estateCacheManager.Flush()
 	_, err = dbEstate.NamedExec("INSERT INTO estate (id, name, description, thumbnail, address, latitude, longitude, rent, door_height, door_width, features, popularity) VALUES (:id, :name, :description, :thumbnail, :address, :latitude, :longitude, :rent, :door_height, :door_width, :features, :popularity)", estates)
 	if err != nil {
 		c.Logger().Errorf("failed to insert estate: %v", err)
@@ -905,6 +924,14 @@ func searchEstates(c echo.Context) error {
 
 func getLowPricedEstate(c echo.Context) error {
 	estates := make([]Estate, 0, Limit)
+	var cacheKey = "getLowPriced"
+
+	v, found := estateCacheManager.Get(cacheKey)
+	if found {
+		gotEstates := v.([]Estate)
+		return c.JSON(http.StatusOK, EstateListResponse{Estates: gotEstates})
+	}
+
 	// query := `SELECT * FROM estate ORDER BY rent ASC, id ASC LIMIT ?`
 	// err := dbEstate.Select(&estates, query, Limit)
 	err := stmtGetLowPricedEstate.Select(&estates, Limit)
@@ -917,6 +944,7 @@ func getLowPricedEstate(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	estateCacheManager.Set(cacheKey, estates, gocache.DefaultExpiration)
 	return c.JSON(http.StatusOK, EstateListResponse{Estates: estates})
 }
 
