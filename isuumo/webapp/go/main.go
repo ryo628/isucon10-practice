@@ -616,7 +616,7 @@ func searchChairs(c echo.Context) error {
 
 	var cacheKey = "searchChairs"
 	var res ChairSearchResponse
-	v, found := chairCacheManager.Get(cacheKey + "count")
+	v, found := chairCacheManager.Get(cacheKey + "count" + fmt.Sprintln(params))
 	if found {
 		res.Count = v.(int64)
 	} else {
@@ -625,7 +625,7 @@ func searchChairs(c echo.Context) error {
 			c.Logger().Errorf("searchChairs DB execution error : %v", err)
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		chairCacheManager.Set(cacheKey+"count", res.Count, gocache.DefaultExpiration)
+		chairCacheManager.Set(cacheKey+"count"+fmt.Sprintln(params), res.Count, gocache.DefaultExpiration)
 	}
 
 	chairs := []Chair{}
