@@ -94,3 +94,6 @@ kataribe:
 
 pt-query-digest:
 	sudo pt-query-digest --limit 10 /var/log/mysql/slow.log | cut -b 1-320 | $(SLACKCAT)
+
+mysql-multi-prepare:
+	sudo mysql -e "rename user isucon@'*' to isucon@'172.%'"
