@@ -407,6 +407,8 @@ func initialize(c echo.Context) error {
 		}
 	}
 
+	chairCacheManager.Flush()
+	estateCacheManager.Flush()
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
 	})
