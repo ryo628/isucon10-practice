@@ -368,13 +368,8 @@ func postChair(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("failed to begin tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
-	for _, row := range records {
+	chairs := make([]map[string]interface{}, 500)
+	for i, row := range records {
 		rm := RecordMapper{Record: row}
 		id := rm.NextInt()
 		name := rm.NextString()
@@ -393,16 +388,28 @@ func postChair(c echo.Context) error {
 			c.Logger().Errorf("failed to read record: %v", err)
 			return c.NoContent(http.StatusBadRequest)
 		}
-		_, err := tx.Exec("INSERT INTO chair(id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock)
-		if err != nil {
-			c.Logger().Errorf("failed to insert chair: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
+		chairs[i] = map[string]interface{}{
+			"id":          id,
+			"name":        name,
+			"description": description,
+			"thumbnail":   thumbnail,
+			"price":       price,
+			"height":      height,
+			"width":       width,
+			"depth":       depth,
+			"color":       color,
+			"features":    features,
+			"kind":        kind,
+			"popularity":  popularity,
+			"stock":       stock,
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("failed to commit tx: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	_, err = db.NamedExec(`INSERT INTO chair (id, name, description, thumbnail, price, height, width, depth, color, features, kind, popularity, stock) VALUES (:id,:name,:description,:thumbnail,:price,:height,:width,:depth,:color,:features,:kind,:popularity,:stock)`, chairs)
+	if err != nil {
+			c.Logger().Errorf("failed to insert chair: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
 	}
+
 	return c.NoContent(http.StatusCreated)
 }
 
