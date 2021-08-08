@@ -31,6 +31,14 @@ var mySQLChairConnectionData *MySQLConnectionEnv
 var chairSearchCondition ChairSearchCondition
 var estateSearchCondition EstateSearchCondition
 
+var stmtGetChairDetail *sqlx.Stmt
+var stmtGetLowPricedChair *sqlx.Stmt
+var stmtGetEstateDetail *sqlx.Stmt
+var stmtGetLowPricedEstate *sqlx.Stmt
+var stmtSearchRecommendedEstateWithChair1 *sqlx.Stmt
+var stmtSearchRecommendedEstateWithChair2 *sqlx.Stmt
+var stmtPostEstateRequestDocument *sqlx.Stmt
+
 type InitializeResponse struct {
 	Language string `json:"language"`
 }
@@ -311,6 +319,35 @@ func main() {
 	dbChair.SetMaxOpenConns(10)
 	defer dbChair.Close()
 
+	stmtGetChairDetail, err = dbChair.Preparex(`SELECT * FROM chair WHERE id = ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+	stmtGetLowPricedChair, err = dbChair.Preparex(`SELECT * FROM chair WHERE stock > 0 ORDER BY price ASC, id ASC LIMIT ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+	stmtGetEstateDetail, err = dbEstate.Preparex(`SELECT * FROM estate WHERE id = ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+	stmtGetLowPricedEstate, err = dbEstate.Preparex(`SELECT * FROM estate ORDER BY rent ASC, id ASC LIMIT ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+	stmtSearchRecommendedEstateWithChair1, err = dbChair.Preparex(`SELECT * FROM chair WHERE id = ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+	stmtSearchRecommendedEstateWithChair2, err = dbEstate.Preparex(`SELECT * FROM estate WHERE (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) ORDER BY popularity_reversed, id ASC LIMIT ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+	stmtPostEstateRequestDocument, err = dbEstate.Preparex(`SELECT * FROM estate WHERE id = ?`)
+	if err != nil {
+		e.Logger.Fatalf("Prepared statment error: %v", err)
+	}
+
 	// Start server
 	serverPort := fmt.Sprintf(":%v", getEnv("SERVER_PORT", "1323"))
 	e.Logger.Fatal(e.Start(serverPort))
@@ -375,8 +412,8 @@ func getChairDetail(c echo.Context) error {
 	}
 
 	chair := Chair{}
-	query := `SELECT * FROM chair WHERE id = ?`
-	err = dbChair.Get(&chair, query, id)
+	// query := `SELECT * FROM chair WHERE id = ?`
+	err = stmtGetChairDetail.Get(&chair, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Echo().Logger.Infof("requested id's chair not found : %v", id)
@@ -649,8 +686,9 @@ func getChairSearchCondition(c echo.Context) error {
 
 func getLowPricedChair(c echo.Context) error {
 	var chairs []Chair
-	query := `SELECT * FROM chair WHERE stock > 0 ORDER BY price ASC, id ASC LIMIT ?`
-	err := dbChair.Select(&chairs, query, Limit)
+	// query := `SELECT * FROM chair WHERE stock > 0 ORDER BY price ASC, id ASC LIMIT ?`
+	// err := dbChair.Select(&chairs, query, Limit)
+	err := stmtGetLowPricedChair.Select(&chairs, Limit)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Logger().Error("getLowPricedChair not found")
@@ -671,7 +709,8 @@ func getEstateDetail(c echo.Context) error {
 	}
 
 	var estate Estate
-	err = dbEstate.Get(&estate, "SELECT * FROM estate WHERE id = ?", id)
+	// err = dbEstate.Get(&estate, "SELECT * FROM estate WHERE id = ?", id)
+	err = stmtGetEstateDetail.Get(&estate, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Echo().Logger.Infof("getEstateDetail estate id %v not found", id)
@@ -866,8 +905,9 @@ func searchEstates(c echo.Context) error {
 
 func getLowPricedEstate(c echo.Context) error {
 	estates := make([]Estate, 0, Limit)
-	query := `SELECT * FROM estate ORDER BY rent ASC, id ASC LIMIT ?`
-	err := dbEstate.Select(&estates, query, Limit)
+	// query := `SELECT * FROM estate ORDER BY rent ASC, id ASC LIMIT ?`
+	// err := dbEstate.Select(&estates, query, Limit)
+	err := stmtGetLowPricedEstate.Select(&estates, Limit)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Logger().Error("getLowPricedEstate not found")
@@ -888,8 +928,9 @@ func searchRecommendedEstateWithChair(c echo.Context) error {
 	}
 
 	chair := Chair{}
-	query := `SELECT * FROM chair WHERE id = ?`
-	err = dbChair.Get(&chair, query, id)
+	// query := `SELECT * FROM chair WHERE id = ?`
+	// err = dbChair.Get(&chair, query, id)
+	err = stmtSearchRecommendedEstateWithChair1.Get(&chair, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.Logger().Infof("Requested chair id \"%v\" not found", id)
@@ -903,8 +944,9 @@ func searchRecommendedEstateWithChair(c echo.Context) error {
 	w := chair.Width
 	h := chair.Height
 	d := chair.Depth
-	query = `SELECT * FROM estate WHERE (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) ORDER BY popularity_reversed, id ASC LIMIT ?`
-	err = dbEstate.Select(&estates, query, w, h, w, d, h, w, h, d, d, w, d, h, Limit)
+	// query = `SELECT * FROM estate WHERE (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) OR (door_width >= ? AND door_height >= ?) ORDER BY popularity_reversed, id ASC LIMIT ?`
+	// err = dbEstate.Select(&estates, query, w, h, w, d, h, w, h, d, d, w, d, h, Limit)
+	err = stmtSearchRecommendedEstateWithChair2.Select(&estates, w, h, w, d, h, w, h, d, d, w, d, h, Limit)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusOK, EstateListResponse{[]Estate{}})
@@ -972,8 +1014,9 @@ func postEstateRequestDocument(c echo.Context) error {
 	}
 
 	estate := Estate{}
-	query := `SELECT * FROM estate WHERE id = ?`
-	err = dbEstate.Get(&estate, query, id)
+	// query := `SELECT * FROM estate WHERE id = ?`
+	// err = dbEstate.Get(&estate, query, id)
+	err = stmtPostEstateRequestDocument.Get(&estate, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.NoContent(http.StatusNotFound)
